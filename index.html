@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV File Upload and Doughnut Chart</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>CSV File Upload and Doughnut Chart Display</h1>
+  
+  <!-- File Upload -->
+  <input type="file" id="csvFileInput" accept=".csv" />
+  
+  <!-- Canvas for Doughnut Chart -->
+  <canvas id="doughnutChart"></canvas>
+
+  <script>
+    document.getElementById('csvFileInput').addEventListener('change', handleFileUpload);
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const text = event.target.result;
+        const data = parseCSV(text);
+        if (data) {
+          const { labels, values, percentages } = processCSVData(data);
+          displayDoughnutChart(labels, values, percentages);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Parses CSV file content
+    function parseCSV(text) {
+      const delimiter = text.includes('\t') ? '\t' : ',';
+      const rows = text.trim().split('\n').map(row => row.split(delimiter).map(cell => cell.trim()));
+      const headers = rows[0];
+
+      const expectedHeaders = [
+        "Account Number", "Account Name", "Symbol", "Description", "Quantity", "Last Price", 
+        "Last Price Change", "Current Value", "Today's Gain/Loss Dollar", "Today's Gain/Loss Percent", 
+        "Total Gain/Loss Dollar", "Total Gain/Loss Percent", "Percent Of Account", 
+        "Cost Basis Total", "Average Cost Basis", "Type"
+      ];
+
+      const normalizedHeaders = headers.map(header => header.toLowerCase().replace(/\s+/g, '').trim());
+      const normalizedExpectedHeaders = expectedHeaders.map(header => header.toLowerCase().replace(/\s+/g, '').trim());
+
+      if (!normalizedExpectedHeaders.every((header, index) => normalizedHeaders[index] === header)) {
+        console.log("CSV headers do not match the expected format.");
+        alert("CSV headers do not match the expected format.");
+        return null;
+      }
+
+      return rows.slice(1).map(row => {
+        return row.reduce((acc, value, index) => {
+          acc[headers[index]] = value;
+          return acc;
+        }, {});
+      });
+    }
+
+    // Processes CSV data to extract labels, values, and percentages for the chart, filters by "Account Name"
+    function processCSVData(data) {
+      const labels = [];
+      const values = [];
+      const percentages = [];
+      
+      data.forEach(item => {
+        if (item['Account Name'] === "Individual") {
+          const currentValue = item['Current Value'];
+          const percentOfAccount = item['Percent Of Account'];
+
+          if (currentValue && percentOfAccount) {
+            const parsedValue = parseFloat(currentValue.replace(/[^0-9.-]+/g, ""));
+            const parsedPercentage = parseFloat(percentOfAccount.replace(/[^0-9.-]+/g, ""));
+
+            if (!isNaN(parsedValue) && !isNaN(parsedPercentage)) {
+              const label = item.Symbol || item.Description || "Unknown Asset";
+
+              if (label !== "Unknown Asset") {
+                labels.push(`${label} (${parsedPercentage.toFixed(2)}%)`);
+                values.push(parsedValue);
+                percentages.push(parsedPercentage);
+              }
+            } else {
+              console.warn("Invalid 'Current Value' or 'Percent Of Account' for:", item, currentValue, percentOfAccount);
+            }
+          } else {
+            console.warn("Missing 'Current Value' or 'Percent Of Account' for:", item);
+            const label = item.Symbol || item.Description || "Unknown Asset";
+            if (label !== "Unknown Asset") {
+              labels.push(`${label} (0%)`);
+              values.push(0);
+            }
+          }
+        }
+      });
+      
+      return { labels, values, percentages };
+    }
+
+    // Displays a doughnut chart with Chart.js
+    function displayDoughnutChart(labels, values, percentages) {
+      const ctx = document.getElementById('doughnutChart').getContext('2d');
+      if (window.myDoughnutChart) {
+        window.myDoughnutChart.destroy();  // Destroy previous chart instance, if any
+      }
+
+      // Set canvas size explicitly here to 720x720px
+      document.getElementById('doughnutChart').style.width = '720px';
+      document.getElementById('doughnutChart').style.height = '720px';
+
+      window.myDoughnutChart = new Chart(ctx, {
+        type: 'doughnut',  // Change chart type to 'doughnut'
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Current Value',
+            data: values,
+            backgroundColor: generateRandomColors(values.length),
+            borderColor: '#ffffff',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: false, // Disable responsiveness so the canvas size is honored
+          maintainAspectRatio: false, // Allow explicit size
+          cutoutPercentage: 50,  // Adjust size of the hole in the doughnut
+          plugins: {
+            legend: {
+              position: 'right',  // Move the legend to the right
+            }
+          }
+        }
+      });
+    }
+
+    // Generates an array of random colors for chart segments
+    function generateRandomColors(numColors) {
+      const colors = [];
+      for (let i = 0; i < numColors; i++) {
+        const r = Math.floor(Math.random() * 255);
+        const g = Math.floor(Math.random() * 255);
+        const b = Math.floor(Math.random() * 255);
+        colors.push(`rgba(${r}, ${g}, ${b}, 0.7)`);
+      }
+      return colors;
+    }
+  </script>
+</body>
+</html>
